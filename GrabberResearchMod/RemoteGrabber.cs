@@ -7,6 +7,12 @@ namespace GrabberResearchMod
     [RegisterTypeInIl2Cpp]
     public class RemoteGrabber : MonoBehaviour
     {
+        public Transform ControllerTransform
+        {
+            get => _controllerTransform;
+            set => _controllerTransform = value;
+        }
+
         private static readonly float s_aimAssistRadius = 0.03f;
         private static readonly float s_handFollowDistance = 0.1f;
         private static readonly float s_releaseDistance = 1.8f;
@@ -16,33 +22,40 @@ namespace GrabberResearchMod
         private FixedJoint? _fixedJoint;
         private RigidbodyManager? _targetRBManager;
         private Collider? _targetCollider;
+        private Rigidbody _playerRigidbody = new Rigidbody();
+        private ConfigurableJoint _configurableJoint;
+        private Transform _controllerTransform = new Transform();
         private Transform _grabCenter = new Transform();
 
         public RemoteGrabber(IntPtr ptr) : base(ptr) { }
 
         void Awake()
         {
+            Rigidbody rigidbody = this.gameObject.AddComponent<Rigidbody>();
+            rigidbody.angularDrag = 0;
+
             GameObject grabCenter = new GameObject("GrabCenter");
             _grabCenter = grabCenter.transform;
             _grabCenter.transform.parent = this.transform;
             _grabCenter.transform.localPosition = new Vector3(-0.05f, 0, 0);
 
-            Rigidbody rigidbody = this.gameObject.AddComponent<Rigidbody>();
-            rigidbody.angularDrag = 0;
+            GameObject parentObj = this.transform.parent.gameObject;
 
-            ConfigurableJoint configurableJoint = this.transform.parent.gameObject.AddComponent<ConfigurableJoint>();
-            configurableJoint.rotationDriveMode = RotationDriveMode.Slerp;
+            _playerRigidbody = parentObj.GetComponent<Rigidbody>();
+
+            _configurableJoint = parentObj.AddComponent<ConfigurableJoint>();
+            _configurableJoint.rotationDriveMode = RotationDriveMode.Slerp;
             JointDrive jointDrive = new JointDrive();
             jointDrive.positionSpring = 10000;
             jointDrive.positionDamper = 200;
             jointDrive.maximumForce = 400;
-            configurableJoint.slerpDrive = jointDrive;
-            configurableJoint.xDrive = jointDrive;
-            configurableJoint.yDrive = jointDrive;
-            configurableJoint.zDrive = jointDrive;
-            configurableJoint.autoConfigureConnectedAnchor = false;
-            configurableJoint.connectedBody = rigidbody;
-            configurableJoint.enablePreprocessing = false;
+            _configurableJoint.slerpDrive = jointDrive;
+            _configurableJoint.xDrive = jointDrive;
+            _configurableJoint.yDrive = jointDrive;
+            _configurableJoint.zDrive = jointDrive;
+            _configurableJoint.autoConfigureConnectedAnchor = false;
+            _configurableJoint.connectedBody = rigidbody;
+            _configurableJoint.enablePreprocessing = false;
         }
 
         void Update()
@@ -53,6 +66,15 @@ namespace GrabberResearchMod
             //{
             //    Release();
             //}
+        }
+
+        void FixedUpdate()
+        {
+            Transform playerTransform = _playerRigidbody.transform;
+            Vector3 localControllerPos = playerTransform.InverseTransformPoint(_controllerTransform.position);
+            Quaternion localControllerRot = Quaternion.Inverse(playerTransform.rotation) * _controllerTransform.rotation;
+            _configurableJoint.targetPosition = localControllerPos;
+            _configurableJoint.targetRotation = localControllerRot;
         }
 
         public void Grab()

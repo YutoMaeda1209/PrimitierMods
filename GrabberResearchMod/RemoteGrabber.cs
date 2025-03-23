@@ -5,30 +5,20 @@ using UnityEngine;
 namespace GrabberResearchMod
 {
     [RegisterTypeInIl2Cpp]
-    public class RemoteHand : MonoBehaviour
+    public class RemoteGrabber : MonoBehaviour
     {
-        public Transform RealHandTransform
-        {
-            get { return _realHandTransform; }
-            set
-            {
-                _realHandTransform = value;
-                this.transform.position = _realHandTransform.position;
-                this.transform.rotation = _realHandTransform.rotation;
-            }
-        }
-
         private static readonly float s_aimAssistRadius = 0.03f;
         private static readonly float s_handFollowDistance = 0.1f;
         private static readonly float s_releaseDistance = 1.8f;
         private static readonly float s_remoteGrabDistance = 1.6f;
         private static readonly float s_grabRadius = 0.05f;
 
-        private Transform _realHandTransform = new Transform();
         private FixedJoint? _fixedJoint;
+        private RigidbodyManager? _targetRBManager;
+        private Collider? _targetCollider;
         private Transform _grabCenter = new Transform();
 
-        public RemoteHand(IntPtr ptr) : base(ptr) { }
+        public RemoteGrabber(IntPtr ptr) : base(ptr) { }
 
         void Awake()
         {
@@ -41,10 +31,18 @@ namespace GrabberResearchMod
             rigidbody.angularDrag = 0;
 
             ConfigurableJoint configurableJoint = this.transform.parent.gameObject.AddComponent<ConfigurableJoint>();
-            configurableJoint.connectedBody = rigidbody;
-            //configurableJoint.anchor = new Vector3(0, 0, 0);
+            configurableJoint.rotationDriveMode = RotationDriveMode.Slerp;
+            JointDrive jointDrive = new JointDrive();
+            jointDrive.positionSpring = 10000;
+            jointDrive.positionDamper = 200;
+            jointDrive.maximumForce = 400;
+            configurableJoint.slerpDrive = jointDrive;
+            configurableJoint.xDrive = jointDrive;
+            configurableJoint.yDrive = jointDrive;
+            configurableJoint.zDrive = jointDrive;
             configurableJoint.autoConfigureConnectedAnchor = false;
-            //configurableJoint.connectedAnchor = new Vector3(0, 0, 0);
+            configurableJoint.connectedBody = rigidbody;
+            configurableJoint.enablePreprocessing = false;
         }
 
         void Update()
@@ -59,28 +57,27 @@ namespace GrabberResearchMod
 
         public void Grab()
         {
-            RigidbodyManager rigidbodyManager;
             Collider[] colliders = new Collider[1];
             bool isTouching = Physics.OverlapSphereNonAlloc(this.transform.position, s_grabRadius, colliders) > 0;
             if (isTouching)
             {
-                Collider collider = colliders[0];
-                GameObject targetObject = collider.transform.parent.gameObject;
-                rigidbodyManager = targetObject.GetComponent<RigidbodyManager>();
+                _targetCollider = colliders[0];
+                GameObject targetObject = _targetCollider.transform.parent.gameObject;
+                _targetRBManager = targetObject.GetComponent<RigidbodyManager>();
             }
             else
             {
                 Physics.Raycast(this.transform.position, this.transform.forward, out RaycastHit hit, s_remoteGrabDistance);
-                Collider collider = hit.collider;
-                GameObject targetObject = collider.transform.parent.gameObject;
-                rigidbodyManager = targetObject.GetComponent<RigidbodyManager>();
+                _targetCollider = hit.collider;
+                GameObject targetObject = _targetCollider.transform.parent.gameObject;
+                _targetRBManager = targetObject.GetComponent<RigidbodyManager>();
             }
 
-            if (rigidbodyManager != null)
+            if (_targetRBManager != null)
             {
                 _fixedJoint = this.gameObject.AddComponent<FixedJoint>();
                 _fixedJoint.anchor = _grabCenter.localPosition;
-                Rigidbody targetRigidbody = rigidbodyManager.rb;
+                Rigidbody targetRigidbody = _targetRBManager.rb;
                 _fixedJoint.connectedBody = targetRigidbody;
                 _fixedJoint.connectedAnchor = targetRigidbody.transform.InverseTransformPoint(_grabCenter.position);
             }
@@ -90,11 +87,38 @@ namespace GrabberResearchMod
         {
             GameObject.Destroy(_fixedJoint);
             _fixedJoint = null;
+            _targetRBManager = null;
+            _targetCollider = null;
         }
 
         public void Bond()
         {
-
+            if (_fixedJoint == null || _targetRBManager == null || _targetCollider == null)
+                return;
+            Il2CppSystem.Collections.Generic.HashSet<Il2CppSystem.ValueTuple<Collider, Collider>> contacts = _targetRBManager.Contacts;
+            Il2CppSystem.Collections.Generic.List<Il2CppSystem.ValueTuple<Collider, Collider, Vector3>> contactPoints = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.ValueTuple<Collider, Collider, Vector3>>();
+            foreach (Il2CppSystem.ValueTuple<Collider, Collider> contact in contacts)
+            {
+                Collider collider1 = contact.Item1;
+                Collider collider2 = contact.Item2;
+                if (collider1 == _targetCollider)
+                {
+                    Il2CppSystem.ValueTuple<Collider, Collider, Vector3> contactPoint =
+                        new Il2CppSystem.ValueTuple<Collider, Collider, Vector3>(
+                            collider1, collider2, collider1.ClosestPoint(collider2.transform.position)
+                            );
+                    contactPoints.Add(contactPoint);
+                }
+                else if (collider2 == _targetCollider)
+                {
+                    Il2CppSystem.ValueTuple<Collider, Collider, Vector3> contactPoint =
+                        new Il2CppSystem.ValueTuple<Collider, Collider, Vector3>(
+                            collider2, collider1, collider2.ClosestPoint(collider1.transform.position)
+                            );
+                    contactPoints.Add(contactPoint);
+                }
+            }
+            _targetRBManager.TryBondOrMerge(contactPoints, _targetCollider);
         }
 
         public void DrawRay(Vector3 start, Vector3 dir, Color color, float duration = 0, bool depthTest = true)
@@ -102,7 +126,6 @@ namespace GrabberResearchMod
             GameObject lineObj = new GameObject("DebugLine");
             LineRenderer lineRenderer = lineObj.AddComponent<LineRenderer>();
 
-            // LineRendererの設定
             lineRenderer.startWidth = 0.02f;
             lineRenderer.endWidth = 0.02f;
             lineRenderer.positionCount = 2;
@@ -111,13 +134,11 @@ namespace GrabberResearchMod
             lineRenderer.endColor = color;
             lineRenderer.useWorldSpace = true;
 
-            // 線の始点と終点を設定
             lineRenderer.SetPosition(0, start);
             lineRenderer.SetPosition(1, start + dir);
 
             if (duration > 0)
             {
-                // 指定時間後に削除
                 GameObject.Destroy(lineObj, duration);
             }
         }

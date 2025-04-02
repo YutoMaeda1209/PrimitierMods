@@ -7,11 +7,17 @@ namespace GrabberResearchMod
     [RegisterTypeInIl2Cpp]
     public class RemoteGrabber : MonoBehaviour
     {
-        public Transform ControllerTransform
+        public Transform HandControllerTransform
         {
-            get => _controllerTransform;
-            set => _controllerTransform = value;
+            get => _handControllerTransform;
+            set => _handControllerTransform = value;
         }
+        public bool IsLeftHand
+        {
+            get => _isLeftHand;
+            set => _isLeftHand = value;
+        }
+        public bool IsGrabbing => _isGrabbing;
 
         private static readonly float s_aimAssistRadius = 0.03f;
         private static readonly float s_handFollowDistance = 0.1f;
@@ -19,13 +25,17 @@ namespace GrabberResearchMod
         private static readonly float s_remoteGrabDistance = 1.6f;
         private static readonly float s_grabRadius = 0.05f;
 
-        private FixedJoint? _fixedJoint;
-        private RigidbodyManager? _targetRBManager;
-        private Collider? _targetCollider;
         private Rigidbody _playerRigidbody = new Rigidbody();
-        private ConfigurableJoint _configurableJoint;
-        private Transform _controllerTransform = new Transform();
+        private ConfigurableJoint _bodyJoint;
+        Transform _playerTransform = new Transform();
+        private Transform _handControllerTransform = new Transform();
         private Transform _grabCenter = new Transform();
+        private bool _isLeftHand;
+        private bool _isGrabbing;
+
+        private Collider? _targetCollider;
+        private RigidbodyManager? _targetRbManager;
+        private FixedJoint? _targetJoint;
 
         public RemoteGrabber(IntPtr ptr) : base(ptr) { }
 
@@ -34,95 +44,167 @@ namespace GrabberResearchMod
             Rigidbody rigidbody = this.gameObject.AddComponent<Rigidbody>();
             rigidbody.angularDrag = 0;
 
-            GameObject grabCenter = new GameObject("GrabCenter");
-            _grabCenter = grabCenter.transform;
-            _grabCenter.transform.parent = this.transform;
-            _grabCenter.transform.localPosition = new Vector3(-0.05f, 0, 0);
+            _grabCenter = this.transform.GetChild(0);
 
             GameObject parentObj = this.transform.parent.gameObject;
 
             _playerRigidbody = parentObj.GetComponent<Rigidbody>();
+            _playerTransform = _playerRigidbody.transform;
 
-            _configurableJoint = parentObj.AddComponent<ConfigurableJoint>();
-            _configurableJoint.rotationDriveMode = RotationDriveMode.Slerp;
+            _bodyJoint = parentObj.AddComponent<ConfigurableJoint>();
+            _bodyJoint.rotationDriveMode = RotationDriveMode.Slerp;
             JointDrive jointDrive = new JointDrive();
             jointDrive.positionSpring = 10000;
             jointDrive.positionDamper = 200;
             jointDrive.maximumForce = 400;
-            _configurableJoint.slerpDrive = jointDrive;
-            _configurableJoint.xDrive = jointDrive;
-            _configurableJoint.yDrive = jointDrive;
-            _configurableJoint.zDrive = jointDrive;
-            _configurableJoint.autoConfigureConnectedAnchor = false;
-            _configurableJoint.connectedBody = rigidbody;
-            _configurableJoint.enablePreprocessing = false;
+            _bodyJoint.slerpDrive = jointDrive;
+            _bodyJoint.xDrive = jointDrive;
+            _bodyJoint.yDrive = jointDrive;
+            _bodyJoint.zDrive = jointDrive;
+            _bodyJoint.autoConfigureConnectedAnchor = false;
+            _bodyJoint.connectedBody = rigidbody;
+            _bodyJoint.enablePreprocessing = false;
         }
 
         void Update()
         {
-            DrawRay(this.transform.position, this.transform.forward * s_remoteGrabDistance, Color.red, 0.05f);
+            Vector3 direction;
+            if (_isLeftHand)
+                direction = -this.transform.right;
+            else
+                direction = this.transform.right;
 
-            //if (Vector3.Distance(this.transform.position, _realHandTransform.position) > s_releaseDistance)
-            //{
-            //    Release();
-            //}
+            if (_isGrabbing)
+            {
+                DrawRay(this.transform.position, direction * s_remoteGrabDistance, Color.green, 0.05f);
+            }
+            else
+            {
+                DrawRay(this.transform.position, direction * s_remoteGrabDistance, Color.red, 0.05f);
+            }
+
+            if (Vector3.Distance(this.transform.position, _handControllerTransform.position) > s_releaseDistance)
+            {
+                Release();
+            }
         }
 
         void FixedUpdate()
         {
-            Transform playerTransform = _playerRigidbody.transform;
-            Vector3 localControllerPos = playerTransform.InverseTransformPoint(_controllerTransform.position);
-            Quaternion localControllerRot = Quaternion.Inverse(playerTransform.rotation) * _controllerTransform.rotation;
-            _configurableJoint.targetPosition = localControllerPos;
-            _configurableJoint.targetRotation = localControllerRot;
+            Vector3 localControllerPos = _playerTransform.InverseTransformPoint(_handControllerTransform.position);
+            Quaternion localControllerRot = Quaternion.Inverse(_playerTransform.rotation) * _handControllerTransform.rotation;
+            _bodyJoint.targetPosition = localControllerPos;
+            _bodyJoint.targetRotation = localControllerRot;
         }
 
         public void Grab()
         {
-            Collider[] colliders = new Collider[1];
-            bool isTouching = Physics.OverlapSphereNonAlloc(this.transform.position, s_grabRadius, colliders) > 0;
+            if (_isGrabbing)
+                return;
+
+            Melon<Program>.Logger.Msg("Grab");
+
+            GameObject.Destroy(_targetJoint);
+            _targetJoint = null;
+            _targetCollider = null;
+            _targetRbManager = null;
+            _isGrabbing = false;
+
+            Collider[] overlapColliders = new Collider[1];
+            bool isTouching = Physics.OverlapSphereNonAlloc(this.transform.position, s_grabRadius, overlapColliders, 000000000000000000000000000000000000000000000) > 0;
+
+            if (overlapColliders[0] == null)
+                isTouching = false;
+
             if (isTouching)
             {
-                _targetCollider = colliders[0];
-                GameObject targetObject = _targetCollider.transform.parent.gameObject;
-                _targetRBManager = targetObject.GetComponent<RigidbodyManager>();
+                _targetCollider = overlapColliders[0];
             }
             else
             {
-                Physics.Raycast(this.transform.position, this.transform.forward, out RaycastHit hit, s_remoteGrabDistance);
+                Vector3 direction;
+                if (_isLeftHand)
+                {
+                    direction = -this.transform.right;
+                }
+                else
+                {
+                    direction = this.transform.right;
+                }
+
+                Physics.Raycast(this.transform.position, direction, out RaycastHit hit, s_remoteGrabDistance);
+
+                if (hit.collider == null)
+                    return;
                 _targetCollider = hit.collider;
-                GameObject targetObject = _targetCollider.transform.parent.gameObject;
-                _targetRBManager = targetObject.GetComponent<RigidbodyManager>();
+
+                if (_targetCollider == null)
+                    Melon<Program>.Logger.Msg("Collider2 is null");
             }
 
-            if (_targetRBManager != null)
+            Melon<Program>.Logger.Msg("Touching: " + _targetCollider.name);
+
+            try
             {
-                _fixedJoint = this.gameObject.AddComponent<FixedJoint>();
-                _fixedJoint.anchor = _grabCenter.localPosition;
-                Rigidbody targetRigidbody = _targetRBManager.rb;
-                _fixedJoint.connectedBody = targetRigidbody;
-                _fixedJoint.connectedAnchor = targetRigidbody.transform.InverseTransformPoint(_grabCenter.position);
+                GameObject targetObject = _targetCollider.transform.parent.gameObject;
+                _targetRbManager = targetObject.GetComponent<RigidbodyManager>();
+                if (_targetRbManager == null)
+                    throw new Exception("RigidbodyManager component not found on the target object.");
             }
+            catch
+            {
+                _targetCollider = null;
+                _targetRbManager = null;
+                return;
+            }
+
+            Melon<Program>.Logger.Msg($"RbManager: {_targetRbManager.name}");
+
+            _targetJoint = this.gameObject.AddComponent<FixedJoint>();
+            _targetJoint.anchor = _grabCenter.localPosition;
+            Rigidbody targetRigidbody = _targetRbManager.rb;
+            _targetJoint.connectedBody = targetRigidbody;
+            _targetJoint.connectedAnchor = targetRigidbody.transform.InverseTransformPoint(_grabCenter.position);
+            _isGrabbing = true;
         }
 
         public void Release()
         {
-            GameObject.Destroy(_fixedJoint);
-            _fixedJoint = null;
-            _targetRBManager = null;
+            if (!_isGrabbing)
+                return;
+
+            Melon<Program>.Logger.Msg("Release");
+
+            GameObject.Destroy(_targetJoint);
+            _targetJoint = null;
+            _targetRbManager = null;
             _targetCollider = null;
+            _isGrabbing = false;
         }
 
         public void Bond()
         {
-            if (_fixedJoint == null || _targetRBManager == null || _targetCollider == null)
+            if (_isGrabbing)
                 return;
-            Il2CppSystem.Collections.Generic.HashSet<Il2CppSystem.ValueTuple<Collider, Collider>> contacts = _targetRBManager.Contacts;
-            Il2CppSystem.Collections.Generic.List<Il2CppSystem.ValueTuple<Collider, Collider, Vector3>> contactPoints = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.ValueTuple<Collider, Collider, Vector3>>();
+
+            Melon<Program>.Logger.Msg("Bond");
+
+            if (_targetJoint == null || _targetRbManager == null || _targetCollider == null)
+            {
+                Release();
+                return;
+            }
+
+            Il2CppSystem.Collections.Generic.HashSet<Il2CppSystem.ValueTuple<Collider, Collider>> contacts = _targetRbManager.Contacts;
+
+            Il2CppSystem.Collections.Generic.List<Il2CppSystem.ValueTuple<Collider, Collider, Vector3>> contactPoints =
+                new Il2CppSystem.Collections.Generic.List<Il2CppSystem.ValueTuple<Collider, Collider, Vector3>>();
+
             foreach (Il2CppSystem.ValueTuple<Collider, Collider> contact in contacts)
             {
                 Collider collider1 = contact.Item1;
                 Collider collider2 = contact.Item2;
+
                 if (collider1 == _targetCollider)
                 {
                     Il2CppSystem.ValueTuple<Collider, Collider, Vector3> contactPoint =
@@ -140,16 +222,33 @@ namespace GrabberResearchMod
                     contactPoints.Add(contactPoint);
                 }
             }
-            _targetRBManager.TryBondOrMerge(contactPoints, _targetCollider);
+
+            _targetRbManager.TryBondOrMerge(contactPoints, _targetCollider);
         }
 
-        public void DrawRay(Vector3 start, Vector3 dir, Color color, float duration = 0, bool depthTest = true)
+        public void Separate()
+        {
+            if (_isGrabbing)
+                return;
+
+            Melon<Program>.Logger.Msg("Separate");
+
+            if (_targetJoint == null || _targetRbManager == null || _targetCollider == null)
+            {
+                Release();
+                return;
+            }
+
+            _targetRbManager.TrySeparate(_targetCollider);
+        }
+
+        public static void DrawRay(Vector3 start, Vector3 dir, Color color, float duration = 0, bool depthTest = true)
         {
             GameObject lineObj = new GameObject("DebugLine");
             LineRenderer lineRenderer = lineObj.AddComponent<LineRenderer>();
 
-            lineRenderer.startWidth = 0.02f;
-            lineRenderer.endWidth = 0.02f;
+            lineRenderer.startWidth = 0.001f;
+            lineRenderer.endWidth = 0.001f;
             lineRenderer.positionCount = 2;
             lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
             lineRenderer.startColor = color;

@@ -120,6 +120,9 @@ namespace CubeGenerateMod
                         case 1:
                             CubeGenerator.GenerateBuoy(_playerTransform.position);
                             break;
+                        case 2:
+                            CubeGenerator.GenerateHinge(_playerTransform.position, _playerTransform.rotation);
+                            break;
                         default:
                             Melon<Program>.Logger.Msg("Invalid number");
                             break;

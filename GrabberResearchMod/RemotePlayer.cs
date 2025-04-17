@@ -22,6 +22,12 @@ namespace GrabberResearchMod
         {
             PlayerId = id;
             _playerObj = new GameObject($"RemotePlayer_{PlayerId}");
+
+            CapsuleCollider capsuleCollider = _playerObj.AddComponent<CapsuleCollider>();
+            capsuleCollider.center = new Vector3(0, 0.9f, 0);
+            capsuleCollider.height = 1.8f;
+            capsuleCollider.radius = 0.3f;
+
             Rigidbody rigidbody = _playerObj.AddComponent<Rigidbody>();
             rigidbody.angularDrag = 0;
             rigidbody.collisionDetectionMode = CollisionDetectionMode.Continuous;

@@ -11,6 +11,8 @@ namespace GrabberResearchMod
         private Transform _rightControllerTransform;
         private bool _hasInitialized = false;
 
+        private bool _isLeftGrabbing = false;
+
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             _playerTransform = GameObject.Find("/Player/XR Origin").transform;
@@ -25,18 +27,41 @@ namespace GrabberResearchMod
                 if (!_hasInitialized)
                 {
                     _remotePlayer = new RemotePlayer(0);
+                    _remotePlayer.SetPlayerTransform(_playerTransform);
                     _hasInitialized = true;
                 }
             }
             if (Input.GetKeyDown(KeyCode.F2))
             {
                 if (_remotePlayer != null && _hasInitialized)
-                    _remotePlayer.Grab(true);
+                {
+                    if (_isLeftGrabbing)
+                    {
+                        _remotePlayer.Release(true);
+                        _isLeftGrabbing = false;
+                    }
+                    else
+                    {
+                        _remotePlayer.Grab(true);
+                        _isLeftGrabbing = true;
+                    }
+                }
             }
             if (Input.GetKeyDown(KeyCode.F3))
             {
                 if (_remotePlayer != null && _hasInitialized)
-                    _remotePlayer.Release(true);
+                {
+                    if (_isLeftGrabbing)
+                    {
+                        _remotePlayer.Release(false);
+                        _isLeftGrabbing = false;
+                    }
+                    else
+                    {
+                        _remotePlayer.Grab(false);
+                        _isLeftGrabbing = true;
+                    }
+                }
             }
             if (Input.GetKeyDown(KeyCode.F4))
             {
@@ -48,10 +73,20 @@ namespace GrabberResearchMod
                 if (_remotePlayer != null && _hasInitialized)
                     _remotePlayer.Separate(true);
             }
+            if (Input.GetKeyDown(KeyCode.F6))
+            {
+                if (_remotePlayer != null && _hasInitialized)
+                    _remotePlayer.Bond(false);
+            }
+            if (Input.GetKeyDown(KeyCode.F7))
+            {
+                if (_remotePlayer != null && _hasInitialized)
+                    _remotePlayer.Separate(false);
+            }
 
             if (_remotePlayer != null)
             {
-                _remotePlayer.SetPlayerTransform(_playerTransform);
+                //_remotePlayer.SetPlayerTransform(_playerTransform);
                 _remotePlayer.SetLeftControllerTransform(_leftControllerTransform);
                 _remotePlayer.SetRightControllerTransform(_rightControllerTransform);
             }

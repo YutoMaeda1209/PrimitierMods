@@ -111,7 +111,8 @@ namespace GrabberResearchMod
             _isGrabbing = false;
 
             Collider[] overlapColliders = new Collider[1];
-            bool isTouching = Physics.OverlapSphereNonAlloc(this.transform.position, s_grabRadius, overlapColliders, 000000000000000000000000000000000000000000000) > 0;
+            LayerMask layerMask = ~(1 << (LayerManager.postProcessingLayer & 31));
+            bool isTouching = Physics.OverlapSphereNonAlloc(this.transform.position, s_grabRadius, overlapColliders, layerMask) > 0;
 
             if (overlapColliders[0] == null)
                 isTouching = false;

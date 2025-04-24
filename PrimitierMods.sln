@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GrabberTestMod", "GrabberTe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GrabberResearchMod", "GrabberResearchMod\GrabberResearchMod.csproj", "{B47B56BF-FB6B-4C4E-83F0-E8F9BD3DA716}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlayerSyncMod", "PlayerSyncMod\PlayerSyncMod.csproj", "{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -61,6 +63,14 @@ Global
 		{B47B56BF-FB6B-4C4E-83F0-E8F9BD3DA716}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B47B56BF-FB6B-4C4E-83F0-E8F9BD3DA716}.Release|x64.ActiveCfg = Release|Any CPU
 		{B47B56BF-FB6B-4C4E-83F0-E8F9BD3DA716}.Release|x64.Build.0 = Release|Any CPU
+		{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}.Debug|x64.Build.0 = Debug|Any CPU
+		{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}.Release|x64.ActiveCfg = Release|Any CPU
+		{C0CCF5C0-5338-4A12-8BB9-3F83DB4CD4CA}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
